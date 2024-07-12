@@ -1,0 +1,301 @@
+---
+title: "Cyclistic Case Study"
+author: "Trager Bos"
+date: 07-11-2024
+output: html_document
+---
+# Summary:
+
+The goal provided by Cyclistic is to analyze and differentiate the habits between Cyclistic's casual customers and members. To do this, it is my task to analyze former data provided by said company for the years 2019 and 2020 (The data has been made available by Motivate International Inc. under this license [Divvy Bikes Data License Agreement](https://divvybikes.com/data-license-agreement)) to answer the questions provided by the stakeholder:
+
+1. How do annual members and casual riders use Cyclistic bikes differently?
+2. Why would casual riders buy Cyclistic annual memberships?
+3. How can Cyclistic use digital media to influence casual riders to become members?
+
+My data is located in two .csv files provided by the company for further analysis; the first .csv file, titled “Divvy_Trips_2019_Q1,” has 12 columns and 365069 rows, while “Divvy_Trips_2019_Q1” is organized with 13 columns and 426887 rows. In an initial analysis, one can notice a different number of rows; therefore, a cleaning and merging process took place to have a unified data frame for analysis, which is discussed in the Rmarkdown. 
+
+Based on the analysis and relating the results to how annual members and casual riders use Cyclistic bikes differently, the results show that casual customers ride the bikes for longer durations than members (Average ride length by user type). However, members are more frequent customers. Further analysis of the graph shows spikes of casual customers on the weekends, while members have a spike during the weekdays (Number of Rides by day of the week). To answer the other question presented by the stakeholders, a few possible ways to increase annual membership to the casual audience would be increased digital advertisement during the weekend describing the benefits of being a member and the money saved. It will also include an ad campaign explaining the benefits of being a member for longer trip durations. A new program where weekend passes or subscriptions can be a choice would increase the member count.
+
+```{r}
+# Set CRAN Mirror
+
+chooseCRANmirror(graphics=FALSE, ind=1)
+```
+```{r setup, include=FALSE}
+# Set Chunk Options
+
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+# Install Required Packages
+
+install.packages("tidyverse")
+install.packages("knitr")
+install.packages("conflicted")
+```
+```{r}
+# Load Required Libraries
+
+library(tidyverse)
+library(knitr)
+library(conflicted)
+
+```
+```{r}
+# Resolve Conflicts for Function Names
+
+conflict_prefer("filter", "dplyr")
+conflict_prefer("lag", "dplyr")
+```
+```{r}
+# Read CSV Files
+
+q1_2019_df <- read_csv("Divvy_Trips_2019_Q1.csv")
+q1_2020_df <- read_csv("Divvy_Trips_2020_Q1.csv")
+```
+```{r}
+# Display Column Names
+
+colnames(q1_2019_df)
+colnames(q1_2020_df)
+```
+```{r}
+# Rename Columns in 2019 Dataframe
+
+(q1_2019_df <- rename(q1_2019_df
+                   ,ride_id = trip_id
+                   ,rideable_type = bikeid
+                   ,started_at = start_time
+                   ,ended_at = end_time
+                   ,start_station_name = from_station_name
+                   ,start_station_id = from_station_id
+                   ,end_station_name = to_station_name
+                   ,end_station_id = to_station_id
+                   ,member_casual = usertype
+                   ))
+```
+```{r}
+# Display Structure of Dataframes
+
+str(q1_2019_df)
+str(q1_2020_df)
+```
+```{r}
+# Convert Columns to Character Type
+
+q1_2019_df <-  mutate(q1_2019_df, ride_id = as.character(ride_id)
+                   ,rideable_type = as.character(rideable_type)) 
+```
+```{r}
+# Combine 2019 and 2020 Dataframes
+
+all_trips <- bind_rows(q1_2019_df, q1_2020_df)
+```
+```{r}
+# Select Relevant Columns
+
+all_trips <- all_trips %>%  
+  select(-c(start_lat, start_lng, end_lat, end_lng, birthyear, gender,  "tripduration"))
+```
+```{r}
+# Display Dataframe Summary
+
+colnames(all_trips) 
+nrow(all_trips)  
+dim(all_trips) 
+head(all_trips) 
+str(all_trips)
+summary(all_trips)
+```
+```{r}
+# Display Member Type Counts
+
+table(all_trips$member_casual)
+```
+```{r}
+# Count Missing Values
+
+colSums(is.na(all_trips))
+```
+```{r}
+# Recode Member Type
+
+all_trips <-  all_trips %>% 
+  mutate(member_casual = recode(member_casual
+                                ,"Subscriber" = "member"
+                                ,"Customer" = "casual"))
+```
+```{r}
+# Display Updated Member Type Counts
+
+table(all_trips$member_casual)
+```
+```{r}
+# Create Date-Related Columns
+
+all_trips$date <- as.Date(all_trips$started_at)
+all_trips$month <- format(as.Date(all_trips$date), "%m")
+all_trips$day <- format(as.Date(all_trips$date), "%d")
+all_trips$year <- format(as.Date(all_trips$date), "%Y")
+all_trips$day_of_week <- format(as.Date(all_trips$date), "%A")
+```
+```{r}
+# Calculate Ride Length
+
+all_trips$ride_length <- difftime(all_trips$ended_at,all_trips$started_at)
+```
+```{r}
+# Display Structure of All Trips Dataframe
+
+str(all_trips)
+```
+```{r}
+# Convert Ride Length to Numeric
+
+is.factor(all_trips$ride_length)
+all_trips$ride_length <- as.numeric(as.character(all_trips$ride_length))
+is.numeric(all_trips$ride_length)
+```
+```{r}
+# Filter Out Invalid Data
+
+all_trips_v2 <- all_trips[!(all_trips$start_station_name == "HQ QR" | all_trips$ride_length<0),]
+```
+```{r}
+# Calculate Ride Length Statistics
+
+mean(all_trips_v2$ride_length)
+median(all_trips_v2$ride_length)
+max(all_trips_v2$ride_length)
+min(all_trips_v2$ride_length) 
+```
+```{r}
+summary(all_trips_v2$ride_length)
+```
+```{r}
+# Aggregate Ride Length Statistics by Member Type
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = mean)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = median)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = max)
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual, FUN = min)
+```
+```{r}
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+```
+```{r}
+# Order Days of the Week
+
+all_trips_v2$day_of_week <- ordered(all_trips_v2$day_of_week, levels=c("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"))
+```
+```{r}
+# Aggregate Ride Length by Member Type and Day of Week
+
+aggregate(all_trips_v2$ride_length ~ all_trips_v2$member_casual + all_trips_v2$day_of_week, FUN = mean)
+```
+```{r}
+# Summarize Number of Rides and Average Duration by Weekday
+
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>%  
+  group_by(member_casual, weekday) %>%  
+  summarise(number_of_rides = n()						
+            ,average_duration = mean(ride_length)) %>% 		
+  arrange(member_casual, weekday)							
+```
+```{r}
+# Display Dataframe Summary
+
+colnames(all_trips_v2)
+head(all_trips_v2)
+```
+```{r}
+# Plot Number of Rides by Day of the Week
+
+all_trips_v2 %>%
+  mutate(weekday = wday(started_at, label = TRUE)) %>%
+  group_by(member_casual, weekday) %>%
+  summarise(number_of_rides = n(), average_duration = mean(ride_length)) %>%
+  arrange(member_casual, weekday) %>%
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge") +
+  scale_y_continuous(labels = scales::comma) +
+  labs(title = "Number of Rides by Day of the Week",
+       x = "Day of the Week",
+       y = "Number of Rides") +
+  scale_fill_manual(values = c("member" = "blue", "casual" = "red"))
+```
+```{r}
+# Plot Average Ride Duration by Day of the Week
+
+all_trips_v2 %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")
+```
+```{r}
+# Plot Average Ride Length by User Type
+
+all_trips_v2_avg_ride_length <- all_trips_v2 %>%
+  group_by(member_casual) %>%
+  summarize(avg_ride_length = mean(ride_length))
+
+ggplot(data = all_trips_v2_avg_ride_length, aes(x = member_casual, y = avg_ride_length, fill = member_casual)) +
+  geom_bar(stat = "identity") +
+  labs(title = "Average Ride Length by User Type",
+       x = "User Type",
+       y = "Average Ride Length (minutes)") +
+  scale_fill_manual(values = c("member" = "blue", "casual" = "red"))
+```
+```{r}
+# Plot Daily Ride Frequency
+
+daily_counts <- all_trips_v2 %>%
+  mutate(date = as.Date(date, format = "%Y-%m-%d")) %>%
+  group_by(date) %>%
+  summarize(count = n()) %>%
+  ungroup()
+
+ggplot(data = daily_counts, aes(x = date, y = count)) +
+  geom_bar(stat = "identity", fill = "blue") +
+  labs(title = "Daily Ride Frequency",
+       x = "Date",
+       y = "Number of Rides") +
+  scale_y_continuous(labels = scales::comma_format())
+```
+```{r}
+# Plot Rides Over Time
+
+ggplot(data = all_trips_v2, aes(x = as.Date(date), fill = member_casual)) +
+  geom_histogram(binwidth = 30, position = "dodge") +
+  labs(title = "Rides Over Time",
+       x = "Date",
+       y = "Number of Rides") +
+  scale_fill_manual(values = c("member" = "blue", "casual" = "red"))
+```
+```{r}
+# Plot Ride Length Distribution by User Type
+
+all_trips_v2_clean <- all_trips_v2 %>%
+  filter(!is.na(ride_length)) %>%  
+  mutate(ride_length_minutes = ride_length / 60)
+
+ggplot(data = all_trips_v2_clean, aes(x = ride_length_minutes, fill = member_casual)) +
+  geom_histogram(binwidth = 1, position = "dodge") +
+  labs(title = "Ride Length Distribution by User Type",
+       x = "Ride Length (minutes)",
+       y = "Count") +
+  scale_fill_manual(values = c("member" = "blue", "casual" = "red")) +
+  scale_x_continuous(limits = c(0, 60)) 
+
+```
+```{r}
+# Write Data to CSV
+
+write.csv(all_trips_v2, file = 'all_trips_v2.csv', row.names = FALSE)
+
+```
